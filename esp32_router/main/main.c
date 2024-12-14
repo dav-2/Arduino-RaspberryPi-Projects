@@ -1,4 +1,5 @@
 
+
 #include <string.h>
 #include "esp_log.h"
 #include "esp_wifi.h"
@@ -9,6 +10,8 @@
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
 #include "lwip/ip_addr.h"
+#include "lwip/icmp.h"
+#include "esp_wifi.h"
 
 #define STA_SSID "VM7312921"
 #define STA_PASS "fhzfuKd6brgucct5"
@@ -52,7 +55,7 @@ esp_wifi_config_t ap_config = {
 esp_err_t wifi_init_sta() {
     ESP_LOGI("wifi", "Connecting to home network %s...", STA_SSID);
 
-    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_mode(WIFI_MODE_STA); // Set to Station mode
     esp_wifi_set_config(WIFI_IF_STA, &sta_config);
     esp_wifi_start();
 
@@ -63,11 +66,44 @@ esp_err_t wifi_init_sta() {
 esp_err_t wifi_init_ap() {
     ESP_LOGI("wifi", "Starting AP: %s...", AP_SSID);
 
-    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_mode(WIFI_MODE_AP); // Set to Access Point mode
     esp_wifi_set_config(WIFI_IF_AP, &ap_config);
     esp_wifi_start();
 
     return ESP_OK;
+}
+
+// Function to initialize Wi-Fi in Station + Access Point (STA + AP) mode
+esp_err_t wifi_init_sta_ap() {
+    ESP_LOGI("wifi", "Starting STA + AP mode...");
+
+    esp_wifi_set_mode(WIFI_MODE_STA_AP); // Set to Station + Access Point mode
+    esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+    esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    esp_wifi_start();
+
+    return ESP_OK;
+}
+
+// Function to calculate IP checksum (use for IP header)
+unsigned short ip_checksum(unsigned short *buffer, int len) {
+    unsigned long sum = 0;
+    unsigned short *ptr = buffer;
+
+    while (len > 1) {
+        sum += *ptr++;
+        len -= 2;
+    }
+
+    if (len) {
+        sum += *((unsigned char *) ptr);
+    }
+
+    while (sum >> 16) {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+
+    return ~sum;
 }
 
 // Simple function to modify source and destination IP address (DNAT/SNAT)
@@ -126,7 +162,7 @@ void capture_and_forward_packets() {
             forward_packet_from_sta_to_ap(packet_buffer, len);
         }
 
-        vTaskDelay(1); // Avoid busy-waiting, adjust as needed
+        vTaskDelay(10); // Delay to prevent busy-waiting, adjust as needed
     }
 }
 
@@ -144,11 +180,17 @@ void app_main() {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Initialize Wi-Fi in Station mode (connect to existing Wi-Fi network)
-    ESP_ERROR_CHECK(wifi_init_sta());
+    // Set the desired Wi-Fi mode
+    esp_wifi_set_mode(WIFI_MODE_STA);  // Change to WIFI_MODE_AP or WIFI_MODE_STA_AP as needed
 
-    // Initialize Wi-Fi in Access Point mode (create your own Wi-Fi network)
-    ESP_ERROR_CHECK(wifi_init_ap());
+    // Initialize Wi-Fi based on selected mode
+    if (WIFI_MODE == WIFI_MODE_STA) {
+        ESP_ERROR_CHECK(wifi_init_sta());
+    } else if (WIFI_MODE == WIFI_MODE_AP) {
+        ESP_ERROR_CHECK(wifi_init_ap());
+    } else if (WIFI_MODE == WIFI_MODE_STA_AP) {
+        ESP_ERROR_CHECK(wifi_init_sta_ap());
+    }
 
     ESP_LOGI("wifi", "ESP32 Router Started");
 
