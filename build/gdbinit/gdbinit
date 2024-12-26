@@ -1,0 +1,2 @@
+source /home/david/esp-idf-5.3/esp32_router/build/gdbinit/symbols
+source /home/david/esp-idf-5.3/esp32_router/build/gdbinit/connect
